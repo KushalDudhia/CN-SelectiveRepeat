@@ -4,81 +4,57 @@
 #include "emulator.h"
 #include "gbn.h"
 
-/* ******************************************************************
-   Go Back N protocol.  Adapted from J.F.Kurose
-   ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.2
+// ------------------ CONSTANTS ----------------------------------CONSTANTS----------
 
-   Network properties:
-   - one way network delay averages five time units (longer if there
-   are other messages in the channel for GBN), but can be larger
-   - packets can be corrupted (either the header or the data portion)
-   or lost, according to user-defined probabilities
-   - packets will be delivered in the order in which they were sent
-   (although some can be lost).
+#define RTT 16.0
+#define WINDOWSIZE 6
+#define SEQSPACE 10
+#define NOTINUSE (-1)
 
-   Modifications:
-   - removed bidirectional GBN code and other code not used by prac.
-   - fixed C style to adhere to current programming style
-   - added GBN implementation
-**********************************************************************/
+// ------------------ SENDER STATE VARIABLES ------------------------------VARIABLES----------  
 
-#define RTT  16.0       /* round trip time.  MUST BE SET TO 16.0 when submitting assignment */
-#define WINDOWSIZE 6    /* the maximum number of buffered unacked packet
-                          MUST BE SET TO 6 when submitting assignment */
-#define SEQSPACE 10     /* the min sequence space for GBN must be at least windowsize + 1  (Must be at least 2 × WINDOWSIZE for Selective Repeat)*/
-#define NOTINUSE (-1)   /* used to fill header fields that are not being used */
-
-/* generic procedure to compute the checksum of a packet.  Used by both sender and receiver
-   the simulator will overwrite part of your packet with 'z's.  It will not overwrite your
-   original checksum.  This procedure must generate a different checksum to the original if
-   the packet is corrupted.
-*/
 static struct pkt buffer[SEQSPACE];     // Stores sent packets
-static bool acked[SEQSPACE];            // Tracks which packets are ACKed
-static int window_base;                 // First unACKed packet in window
-static int next_seqnum;                 // Next sequence number to use
+static bool acked[SEQSPACE];            // Tracks which packets have been ACKed
+static int window_base;                 // Index of earliest unACKed packet
+static int next_seqnum;                 // Next sequence number to assign
 
+// ------------------ RECEIVER STATE VARIABLES ------------------
+
+static int B_nextseqnum;  // required by emulator, not used by SR
+static struct pkt recv_buffer[SEQSPACE];   // Buffers out-of-order packets
+static bool received[SEQSPACE];            // Tracks if a packet has been received
+static int expected_seqnum_B;              // Next expected in-order sequence number
+
+// ------------------ CHECKSUM UTILS ------------------
 
 int ComputeChecksum(struct pkt packet)
 {
-  int checksum = 0;
-  int i;
-
-  checksum = packet.seqnum;
-  checksum += packet.acknum;
-  for ( i=0; i<20; i++ )
-    checksum += (int)(packet.payload[i]);
-
-  return checksum;
+    int checksum = packet.seqnum + packet.acknum;
+    for (int i = 0; i < 20; i++)
+        checksum += (int)(packet.payload[i]);
+    return checksum;
 }
 
 bool IsCorrupted(struct pkt packet)
 {
-  if (packet.checksum == ComputeChecksum(packet))
-    return (false);
-  else
-    return (true);
+    return packet.checksum != ComputeChecksum(packet);
 }
 
-
-/********* Sender (A) variables and functions ************/
-
-static struct pkt buffer[SEQSPACE];
-static bool acked[SEQSPACE];
-static int window_base;
-static int next_seqnum;
-
-
-/* called from layer 5 (application layer), passed the message to be sent to other side */
-
+// ------------------ A_output ------------------
+/*
+ * Called when the application layer wants to send a message.
+ * If the window is not full, the message is added to a packet and sent.
+ */
 void A_output(struct msg message)
 {
     if ((next_seqnum + SEQSPACE - window_base) % SEQSPACE < WINDOWSIZE) {
         struct pkt packet;
         packet.seqnum = next_seqnum;
         packet.acknum = NOTINUSE;
+
         for (int i = 0; i < 20; i++)
             packet.payload[i] = message.data[i];
+
         packet.checksum = ComputeChecksum(packet);
 
         buffer[next_seqnum] = packet;
@@ -98,10 +74,11 @@ void A_output(struct msg message)
     }
 }
 
-
-/* called from layer 3, when a packet arrives for layer 4
-   In this practical this will always be an ACK as B never sends data.
-*/
+// ------------------ A_input ----------------------------------------------------------A_input----------------------
+/*
+ * Called when an ACK is received from receiver B.
+ * Marks the ACKed packet and slides the window forward if possible.
+ */
 void A_input(struct pkt packet)
 {
     if (!IsCorrupted(packet)) {
@@ -110,34 +87,35 @@ void A_input(struct pkt packet)
 
         total_ACKs_received++;
 
-        // If this is a new ACK
         if (!acked[packet.acknum]) {
             acked[packet.acknum] = true;
             new_ACKs++;
         }
 
-        // Slide the window forward
+        // Slide window forward if packets at front are ACKed
         while (acked[window_base]) {
-            acked[window_base] = false;  // clear slot
+            acked[window_base] = false;
             window_base = (window_base + 1) % SEQSPACE;
         }
 
-        // Manage timer
         stoptimer(A);
-        if (window_base != next_seqnum) {
+        if (window_base != next_seqnum)
             starttimer(A, RTT);
-        }
     } else {
         if (TRACE > 0)
             printf("A_input: Corrupted ACK received\n");
     }
 }
 
-/* called when A's timer goes off */
+// ------------------ A_timerinterrupt ------------------
+/*
+ * Called when the sender’s timer expires.
+ * Resends all unACKed packets in the window.
+ */
 void A_timerinterrupt(void)
 {
     if (TRACE > 0)
-        printf("A_timerinterrupt: Timeout occurred. Resending unACKed packets.\n");
+        printf("A_timerinterrupt: Timeout. Resending unACKed packets\n");
 
     for (int i = 0; i < WINDOWSIZE; i++) {
         int seq = (window_base + i) % SEQSPACE;
@@ -146,104 +124,87 @@ void A_timerinterrupt(void)
         if (!acked[seq]) {
             tolayer3(A, buffer[seq]);
             packets_resent++;
-
             if (TRACE > 0)
                 printf("A_timerinterrupt: Resent packet %d\n", seq);
         }
     }
 
-    starttimer(A, RTT);  // Restart timer
+    starttimer(A, RTT);
 }
 
-
-
-/* the following routine will be called once (only) before any other */
-/* entity A routines are called. You can use it to do any initialization */
+// ------------------ A_init ------------------
+/*
+ * Called once before any other A-side routine.
+ * Initializes sender variables.
+ */
 void A_init(void)
-{ /*Updated sr.c with Selective Repeat constants, globals, and A_init()*/
-   
+{
     window_base = 0;
     next_seqnum = 0;
-    for (int i = 0; i < SEQSPACE; i++) {
+    for (int i = 0; i < SEQSPACE; i++)
         acked[i] = false;
-    }
 
     if (TRACE > 0)
-        printf("A_init: SR sender initialized (window_base = %d, next_seqnum = %d)\n", window_base, next_seqnum);
+        printf("A_init: SR sender initialized\n");
 }
 
-
-
-/********* Receiver (B)  variables and procedures ************/
-
-static int expectedseqnum; /* the sequence number expected next by the receiver */
-static int B_nextseqnum;   /* the sequence number for the next packets sent by B */
-
-
-/* called from layer 3, when a packet arrives for layer 4 at B*/
+// ------------------ B_input ------------------
+/*
+ * Called when a packet arrives at receiver B.
+ * Buffers valid packets and sends individual ACKs.
+ * Delivers packets to layer 5 in-order.
+ */
 void B_input(struct pkt packet)
 {
-  struct pkt sendpkt;
-  int i;
+    struct pkt ack_pkt;
 
-  /* if not corrupted and received packet is in order */
-  if  ( (!IsCorrupted(packet))  && (packet.seqnum == expectedseqnum) ) {
-    if (TRACE > 0)
-      printf("----B: packet %d is correctly received, send ACK!\n",packet.seqnum);
-    packets_received++;
+    if (!IsCorrupted(packet)) {
+        if (TRACE > 0)
+            printf("B_input: Received packet %d\n", packet.seqnum);
 
-    /* deliver to receiving application */
-    tolayer5(B, packet.payload);
+        packets_received++;
 
-    /* send an ACK for the received packet */
-    sendpkt.acknum = expectedseqnum;
+        // Always send an ACK for valid packet
+        ack_pkt.seqnum = 0;
+        ack_pkt.acknum = packet.seqnum;
+        for (int i = 0; i < 20; i++)
+            ack_pkt.payload[i] = '0';
+        ack_pkt.checksum = ComputeChecksum(ack_pkt);
+        tolayer3(B, ack_pkt);
 
-    /* update state variables */
-    expectedseqnum = (expectedseqnum + 1) % SEQSPACE;
-  }
-  else {
-    /* packet is corrupted or out of order resend last ACK */
-    if (TRACE > 0)
-      printf("----B: packet corrupted or not expected sequence number, resend ACK!\n");
-    if (expectedseqnum == 0)
-      sendpkt.acknum = SEQSPACE - 1;
-    else
-      sendpkt.acknum = expectedseqnum - 1;
-  }
+        // If not already received, buffer it
+        if (!received[packet.seqnum]) {
+            recv_buffer[packet.seqnum] = packet;
+            received[packet.seqnum] = true;
+        }
 
-  /* create packet */
-  sendpkt.seqnum = B_nextseqnum;
-  B_nextseqnum = (B_nextseqnum + 1) % 2;
-
-  /* we don't have any data to send.  fill payload with 0's */
-  for ( i=0; i<20 ; i++ )
-    sendpkt.payload[i] = '0';
-
-  /* computer checksum */
-  sendpkt.checksum = ComputeChecksum(sendpkt);
-
-  /* send out packet */
-  tolayer3 (B, sendpkt);
+        // Deliver all in-order buffered packets
+        while (received[expected_seqnum_B]) {
+            tolayer5(B, recv_buffer[expected_seqnum_B].payload);
+            received[expected_seqnum_B] = false;
+            expected_seqnum_B = (expected_seqnum_B + 1) % SEQSPACE;
+        }
+    } else {
+        if (TRACE > 0)
+            printf("B_input: Corrupted packet received\n");
+    }
 }
 
-/* the following routine will be called once (only) before any other */
-/* entity B routines are called. You can use it to do any initialization */
+// ------------------ B_init ------------------
+/*
+ * Called once before any other B-side routine.
+ * Initializes receiver variables.
+ */
 void B_init(void)
 {
-  expectedseqnum = 0;
-  B_nextseqnum = 1;
+    expected_seqnum_B = 0;
+    for (int i = 0; i < SEQSPACE; i++)
+        received[i] = false;
+
+    B_nextseqnum = 1;  // not used but required by emulator
 }
 
-/******************************************************************************
- * The following functions need be completed only for bi-directional messages *
- *****************************************************************************/
+// ------------------ Optional / Unused ------------------
 
-/* Note that with simplex transfer from a-to-B, there is no B_output() */
-void B_output(struct msg message)
-{
-}
-
-/* called when B's timer goes off */
-void B_timerinterrupt(void)
-{
-}
+void B_output(struct msg message) {}
+void B_timerinterrupt(void) {}
