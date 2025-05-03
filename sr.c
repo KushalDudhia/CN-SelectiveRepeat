@@ -4,49 +4,48 @@
 #include "emulator.h"
 #include "gbn.h"
 
-// ------------------ CONSTANTS ----------------------------------CONSTANTS----------
+// ------------------ CONSTANTS ------------------
 
 #define RTT 16.0
 #define WINDOWSIZE 6
 #define SEQSPACE 10
 #define NOTINUSE (-1)
 
-// ------------------ SENDER STATE VARIABLES ------------------------------VARIABLES----------  
+// ------------------ SENDER STATE VARIABLES ------------------
 
-static struct pkt buffer[SEQSPACE];     // Stores sent packets
-static bool acked[SEQSPACE];            // Tracks which packets have been ACKed
-static int window_base;                 // Index of earliest unACKed packet
-static int next_seqnum;                 // Next sequence number to assign
+static struct pkt buffer[SEQSPACE];     // Stores sent packets for potential retransmission
+static bool acked[SEQSPACE];            // Tracks whether each sequence number has been ACKed
+static int window_base;                 // Oldest unACKed packet in the window (base of the window)
+static int next_seqnum;                 // Sequence number for the next outgoing packet
 
 // ------------------ RECEIVER STATE VARIABLES ------------------
 
-static int B_nextseqnum;  // required by emulator, not used by SR
-static struct pkt recv_buffer[SEQSPACE];   // Buffers out-of-order packets
-static bool received[SEQSPACE];            // Tracks if a packet has been received
-static int expected_seqnum_B;              // Next expected in-order sequence number
+static int B_nextseqnum;                // Required by emulator, not used in SR
+static struct pkt recv_buffer[SEQSPACE];// Buffers out-of-order packets
+static bool received[SEQSPACE];         // Tracks which sequence numbers have been received
+static int expected_seqnum_B;           // Next expected in-order packet to deliver to layer 5
 
 // ------------------ CHECKSUM UTILS ------------------
 
-int ComputeChecksum(struct pkt packet)
-{
+// Computes the checksum over a packet's fields to detect corruption
+int ComputeChecksum(struct pkt packet) {
     int checksum = packet.seqnum + packet.acknum;
     for (int i = 0; i < 20; i++)
         checksum += (int)(packet.payload[i]);
     return checksum;
 }
 
-bool IsCorrupted(struct pkt packet)
-{
+// Verifies if a packet is corrupted based on checksum
+bool IsCorrupted(struct pkt packet) {
     return packet.checksum != ComputeChecksum(packet);
 }
 
 // ------------------ A_output ------------------
 /*
- * Called when the application layer wants to send a message.
- * If the window is not full, the message is added to a packet and sent.
+ * Called when layer 5 on A has data to send.
+ * If the window is not full, packet is created, buffered and sent.
  */
-void A_output(struct msg message)
-{
+void A_output(struct msg message) {
     if ((next_seqnum + SEQSPACE - window_base) % SEQSPACE < WINDOWSIZE) {
         struct pkt packet;
         packet.seqnum = next_seqnum;
@@ -61,7 +60,9 @@ void A_output(struct msg message)
         acked[next_seqnum] = false;
 
         tolayer3(A, packet);
-        starttimer(A, RTT);
+
+        if (window_base == next_seqnum)
+            starttimer(A, RTT); // Timer is only for the base packet
 
         if (TRACE > 0)
             printf("A_output: Sent packet %d\n", packet.seqnum);
@@ -74,13 +75,12 @@ void A_output(struct msg message)
     }
 }
 
-// ------------------ A_input ----------------------------------------------------------A_input----------------------
+// ------------------ A_input ------------------
 /*
- * Called when an ACK is received from receiver B.
- * Marks the ACKed packet and slides the window forward if possible.
+ * Called when an ACK is received from B.
+ * Marks packets as ACKed and slides the sender window forward.
  */
-void A_input(struct pkt packet)
-{
+void A_input(struct pkt packet) {
     if (!IsCorrupted(packet)) {
         if (TRACE > 0)
             printf("A_input: Received valid ACK %d\n", packet.acknum);
@@ -92,7 +92,7 @@ void A_input(struct pkt packet)
             new_ACKs++;
         }
 
-        // Slide window forward if packets at front are ACKed
+        // Slide the window base forward for consecutive ACKed packets
         while (acked[window_base]) {
             acked[window_base] = false;
             window_base = (window_base + 1) % SEQSPACE;
@@ -101,6 +101,7 @@ void A_input(struct pkt packet)
         stoptimer(A);
         if (window_base != next_seqnum)
             starttimer(A, RTT);
+
     } else {
         if (TRACE > 0)
             printf("A_input: Corrupted ACK received\n");
@@ -109,36 +110,35 @@ void A_input(struct pkt packet)
 
 // ------------------ A_timerinterrupt ------------------
 /*
- * Called when the sender’s timer expires.
- * Resends all unACKed packets in the window.
+ * Called when the timer at A expires.
+ * Resends all unACKed packets in the current window.
  */
-void A_timerinterrupt(void)
-{
+void A_timerinterrupt(void) {
     if (TRACE > 0)
         printf("A_timerinterrupt: Timeout. Resending unACKed packets\n");
 
     for (int i = 0; i < WINDOWSIZE; i++) {
         int seq = (window_base + i) % SEQSPACE;
-        if (seq == next_seqnum) break;
+        if (seq == next_seqnum)
+            break;
 
         if (!acked[seq]) {
             tolayer3(A, buffer[seq]);
             packets_resent++;
+
             if (TRACE > 0)
                 printf("A_timerinterrupt: Resent packet %d\n", seq);
         }
     }
 
-    starttimer(A, RTT);
+    starttimer(A, RTT); // Restart timer after retransmission
 }
 
 // ------------------ A_init ------------------
 /*
- * Called once before any other A-side routine.
- * Initializes sender variables.
+ * Initializes sender-side data structures before simulation starts.
  */
-void A_init(void)
-{
+void A_init(void) {
     window_base = 0;
     next_seqnum = 0;
     for (int i = 0; i < SEQSPACE; i++)
@@ -150,12 +150,11 @@ void A_init(void)
 
 // ------------------ B_input ------------------
 /*
- * Called when a packet arrives at receiver B.
- * Buffers valid packets and sends individual ACKs.
- * Delivers packets to layer 5 in-order.
+ * Called when a packet arrives at B from A.
+ * Sends an individual ACK. Buffers out-of-order packets.
+ * Delivers in-order packets to layer 5.
  */
-void B_input(struct pkt packet)
-{
+void B_input(struct pkt packet) {
     struct pkt ack_pkt;
 
     if (!IsCorrupted(packet)) {
@@ -164,7 +163,7 @@ void B_input(struct pkt packet)
 
         packets_received++;
 
-        // Always send an ACK for valid packet
+        // Prepare ACK
         ack_pkt.seqnum = 0;
         ack_pkt.acknum = packet.seqnum;
         for (int i = 0; i < 20; i++)
@@ -172,18 +171,19 @@ void B_input(struct pkt packet)
         ack_pkt.checksum = ComputeChecksum(ack_pkt);
         tolayer3(B, ack_pkt);
 
-        // If not already received, buffer it
+        // If not already buffered, buffer the packet
         if (!received[packet.seqnum]) {
             recv_buffer[packet.seqnum] = packet;
             received[packet.seqnum] = true;
         }
 
-        // Deliver all in-order buffered packets
+        // Deliver in-order packets
         while (received[expected_seqnum_B]) {
             tolayer5(B, recv_buffer[expected_seqnum_B].payload);
             received[expected_seqnum_B] = false;
             expected_seqnum_B = (expected_seqnum_B + 1) % SEQSPACE;
         }
+
     } else {
         if (TRACE > 0)
             printf("B_input: Corrupted packet received\n");
@@ -192,19 +192,17 @@ void B_input(struct pkt packet)
 
 // ------------------ B_init ------------------
 /*
- * Called once before any other B-side routine.
- * Initializes receiver variables.
+ * Initializes receiver-side data structures before simulation starts.
  */
-void B_init(void)
-{
+void B_init(void) {
     expected_seqnum_B = 0;
     for (int i = 0; i < SEQSPACE; i++)
         received[i] = false;
 
-    B_nextseqnum = 1;  // not used but required by emulator
+    B_nextseqnum = 1; // Required by emulator
 }
 
-// ------------------ Optional / Unused ------------------
+// ------------------ Unused (simplex only) ------------------
 
 void B_output(struct msg message) {}
 void B_timerinterrupt(void) {}
