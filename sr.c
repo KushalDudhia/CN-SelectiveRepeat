@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <string.h>
-
 #include "project2.h"
 
 /* ----------------------------- CONSTANTS ----------------------------- */
@@ -22,7 +21,6 @@ static struct pkt recv_buffer[SEQSPACE];   /* Buffer to store out-of-order packe
 static int received[SEQSPACE];             /* Tracks which packets are received */
 
 /* ------------------------- HELPER FUNCTIONS -------------------------- */
-
 /* Compute checksum for a packet */
 int ComputeChecksum(struct pkt *packet) {
     int checksum = 0;
@@ -36,7 +34,6 @@ int ComputeChecksum(struct pkt *packet) {
 }
 
 /* --------------------------- A: SENDER ------------------------------- */
-
 void A_output(struct msg message) {
     int i;
     if ((next_seqnum + SEQSPACE - window_base) % SEQSPACE < WINDOWSIZE) {
@@ -86,10 +83,11 @@ void A_input(struct pkt packet) {
 }
 
 void A_timerinterrupt(void) {
-    printf("A_timerinterrupt: Timeout. Resending unACKed packets\n");
     int i;
+    int seq;
+    printf("A_timerinterrupt: Timeout. Resending unACKed packets\n");
     for (i = 0; i < WINDOWSIZE; i++) {
-        int seq = (window_base + i) % SEQSPACE;
+        seq = (window_base + i) % SEQSPACE;
         if (!acked[seq]) {
             tolayer3(A, buffer[seq]);
             printf("A_timerinterrupt: Resent packet %d\n", seq);
@@ -109,8 +107,9 @@ void A_init(void) {
 }
 
 /* --------------------------- B: RECEIVER ----------------------------- */
-
 void B_input(struct pkt packet) {
+    struct pkt ack_packet;
+    int i;
     if (packet.checksum != ComputeChecksum(&packet)) {
         printf("B_input: Corrupted packet received\n");
         return;
@@ -118,7 +117,6 @@ void B_input(struct pkt packet) {
 
     printf("B_input: Received packet %d\n", packet.seqnum);
 
-    struct pkt ack_packet;
     ack_packet.seqnum = 0;
     ack_packet.acknum = packet.seqnum;
     memset(ack_packet.payload, 0, 20);
