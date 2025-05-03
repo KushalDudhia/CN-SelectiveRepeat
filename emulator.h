@@ -1,3 +1,10 @@
+
+/* //==================================
+// Computer Networks & Applications
+// Student: Kushal Dudhia
+// Student ID: a1904158
+// Assignment: 2
+//===================================*/
 extern int TRACE;
 
 /* statistics updated by GBN */
@@ -37,4 +44,4 @@ extern void tolayer5(int, char[20]);
 extern void starttimer(int, double);       
 
 /* stop timer at A or B (int) */
-extern void stoptimer(int);               
+extern void stoptimer(int);    

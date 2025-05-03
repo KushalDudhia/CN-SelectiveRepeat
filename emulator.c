@@ -1,3 +1,9 @@
+/* //==================================
+// Computer Networks & Applications
+// Student: Kushal Dudhia
+// Student ID: a1904158
+// Assignment: 2
+//=================================== */
 /* ***** THIS FILE SHOULD NOT BE MODIFIED ****************************
    THERE IS NOT REASON THAT ANY STUDENT SHOULD HAVE TO READ OR UNDERSTAND
    THE CODE BELOW.  YOU SHOLD NOT TOUCH, OR REFERENCE (in your code) ANY
@@ -90,6 +96,9 @@ static int ncorrupt;              /* number corrupted by media*/
 /* isolate all random number generation in one location.  We assume that the*/
 /* system-supplied rand() function return an int in therange [0,mmm]        */
 /****************************************************************************/
+float get_sim_time(void) {
+    return time;  /* Assuming `time` is a global variable in emulator.c */
+}
 double jimsrand(void) 
 {
   double mmm = RAND_MAX;     /* largest int  - MACHINE DEPENDENT!!!!!!!!   */
@@ -140,6 +149,7 @@ void insertevent(struct event *p)
     }
   }
 }
+
 
 void generate_next_arrival(void)
 {
@@ -475,4 +485,4 @@ int main(void)
   printf("number of correct packets received at B:  %d \n", packets_received);
   printf("number of messages delivered to application:  %d \n", messages_delivered);
   return EXIT_SUCCESS;
-}
+} 
