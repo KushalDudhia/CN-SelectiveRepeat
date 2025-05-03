@@ -4,28 +4,28 @@
 #include "emulator.h"
 #include "gbn.h"
 
-// ------------------ CONSTANTS ------------------
+// ------------------ CONSTANTS ------------------///////////////
 
 #define RTT 16.0
 #define WINDOWSIZE 6
 #define SEQSPACE 10
 #define NOTINUSE (-1)
 
-// ------------------ SENDER STATE VARIABLES ------------------
+// ------------------ SENDER STATE VARIABLES ------------------/////////////
 
 static struct pkt buffer[SEQSPACE];     // Stores sent packets for potential retransmission
 static bool acked[SEQSPACE];            // Tracks whether each sequence number has been ACKed
 static int window_base;                 // Oldest unACKed packet in the window (base of the window)
 static int next_seqnum;                 // Sequence number for the next outgoing packet
 
-// ------------------ RECEIVER STATE VARIABLES ------------------
+// ------------------ RECEIVER STATE VARIABLES ------------------//////////////////
 
 static int B_nextseqnum;                // Required by emulator, not used in SR
 static struct pkt recv_buffer[SEQSPACE];// Buffers out-of-order packets
 static bool received[SEQSPACE];         // Tracks which sequence numbers have been received
 static int expected_seqnum_B;           // Next expected in-order packet to deliver to layer 5
 
-// ------------------ CHECKSUM UTILS ------------------
+// ------------------ CHECKSUM UTILS ------------------////////////
 
 // Computes the checksum over a packet's fields to detect corruption
 int ComputeChecksum(struct pkt packet) {
@@ -40,7 +40,7 @@ bool IsCorrupted(struct pkt packet) {
     return packet.checksum != ComputeChecksum(packet);
 }
 
-// ------------------ A_output ------------------
+// ------------------ A_output ------------------/////////////////
 /*
  * Called when layer 5 on A has data to send.
  * If the window is not full, packet is created, buffered and sent.
@@ -75,7 +75,7 @@ void A_output(struct msg message) {
     }
 }
 
-// ------------------ A_input ------------------
+// ------------------ A_input ------------------/////////////////
 /*
  * Called when an ACK is received from B.
  * Marks packets as ACKed and slides the sender window forward.
@@ -108,7 +108,7 @@ void A_input(struct pkt packet) {
     }
 }
 
-// ------------------ A_timerinterrupt ------------------
+// ------------------ A_timerinterrupt ------------------////////////
 /*
  * Called when the timer at A expires.
  * Resends all unACKed packets in the current window.
@@ -134,7 +134,7 @@ void A_timerinterrupt(void) {
     starttimer(A, RTT); // Restart timer after retransmission
 }
 
-// ------------------ A_init ------------------
+// ------------------ A_init ------------------///////////
 /*
  * Initializes sender-side data structures before simulation starts.
  */
@@ -148,7 +148,7 @@ void A_init(void) {
         printf("A_init: SR sender initialized\n");
 }
 
-// ------------------ B_input ------------------
+// ------------------ B_input ------------------/////////
 /*
  * Called when a packet arrives at B from A.
  * Sends an individual ACK. Buffers out-of-order packets.
@@ -190,7 +190,7 @@ void B_input(struct pkt packet) {
     }
 }
 
-// ------------------ B_init ------------------
+// ------------------ B_init ------------------///////////
 /*
  * Initializes receiver-side data structures before simulation starts.
  */
@@ -202,7 +202,7 @@ void B_init(void) {
     B_nextseqnum = 1; // Required by emulator
 }
 
-// ------------------ Unused (simplex only) ------------------
+// ------------------ Unused (simplex only) ------------------///////////
 
 void B_output(struct msg message) {}
 void B_timerinterrupt(void) {}
