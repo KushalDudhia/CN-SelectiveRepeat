@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <string.h>
-#include <stdbool.h>
 
 #include "project2.h"
 
@@ -13,14 +12,14 @@
 /* ------------------------ GLOBAL VARIABLES --------------------------- */
 /* Sender-side variables */
 static struct pkt buffer[SEQSPACE];        /* Buffer for all sent but not yet ACKed packets */
-static bool acked[SEQSPACE];               /* Tracks which packets are acknowledged */
+static int acked[SEQSPACE];                /* Tracks which packets are acknowledged */
 static int window_base = 0;
 static int next_seqnum = 0;
 
 /* Receiver-side variables */
 static int expected_seqnum_B = 0;
 static struct pkt recv_buffer[SEQSPACE];   /* Buffer to store out-of-order packets */
-static bool received[SEQSPACE];            /* Tracks which packets are received */
+static int received[SEQSPACE];             /* Tracks which packets are received */
 
 /* ------------------------- HELPER FUNCTIONS -------------------------- */
 
@@ -30,8 +29,9 @@ int ComputeChecksum(struct pkt *packet) {
     int i;
     checksum += packet->seqnum;
     checksum += packet->acknum;
-    for (i = 0; i < 20; i++)
+    for (i = 0; i < 20; i++) {
         checksum += (int)packet->payload[i];
+    }
     return checksum;
 }
 
@@ -44,11 +44,11 @@ void A_output(struct msg message) {
         packet.seqnum = next_seqnum;
         packet.acknum = NOTINUSE;
         strncpy(packet.payload, message.data, 20);
-        packet.payload[19] = '\0';  /* ensure null termination */
+        packet.payload[19] = '\0';
         packet.checksum = ComputeChecksum(&packet);
 
         buffer[next_seqnum] = packet;
-        acked[next_seqnum] = false;
+        acked[next_seqnum] = 0;
 
         tolayer3(A, packet);
         printf("A_output: Sent packet %d\n", packet.seqnum);
@@ -70,17 +70,18 @@ void A_input(struct pkt packet) {
     }
 
     if (packet.acknum >= 0 && !acked[packet.acknum]) {
-        acked[packet.acknum] = true;
+        acked[packet.acknum] = 1;
         printf("A_input: Received valid ACK %d\n", packet.acknum);
 
         while (acked[window_base]) {
-            acked[window_base] = false;
+            acked[window_base] = 0;
             window_base = (window_base + 1) % SEQSPACE;
         }
 
         stoptimer(A);
-        if (window_base != next_seqnum)
+        if (window_base != next_seqnum) {
             starttimer(A, RTT);
+        }
     }
 }
 
@@ -102,7 +103,7 @@ void A_init(void) {
     window_base = 0;
     next_seqnum = 0;
     for (i = 0; i < SEQSPACE; i++) {
-        acked[i] = false;
+        acked[i] = 0;
     }
     printf("A_init: SR sender initialized\n");
 }
@@ -126,11 +127,11 @@ void B_input(struct pkt packet) {
 
     if (!received[packet.seqnum]) {
         recv_buffer[packet.seqnum] = packet;
-        received[packet.seqnum] = true;
+        received[packet.seqnum] = 1;
 
         while (received[expected_seqnum_B]) {
             tolayer5(B, recv_buffer[expected_seqnum_B].payload);
-            received[expected_seqnum_B] = false;
+            received[expected_seqnum_B] = 0;
             expected_seqnum_B = (expected_seqnum_B + 1) % SEQSPACE;
         }
     }
@@ -140,7 +141,7 @@ void B_init(void) {
     int i;
     expected_seqnum_B = 0;
     for (i = 0; i < SEQSPACE; i++) {
-        received[i] = false;
+        received[i] = 0;
     }
     printf("B_init: SR receiver initialized\n");
 }
