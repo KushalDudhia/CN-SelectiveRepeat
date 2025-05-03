@@ -1,0 +1,371 @@
+
+(base) kushal@Kushals-MacBook-Pro CN-SelectiveRepeat % git log
+commit fb2bbacaed02ef3d75dfd4f868716c560cf7fe31 (HEAD -> main, origin/main, origin/HEAD)
+Author: KushalDudhia <98812374+KushalDudhia@users.noreply.github.com>
+Date:   Sat May 3 17:21:51 2025 +0930
+
+    The main updates made to implement Selective Repeat (SR) from the original Go-Back-N (GBN) protocol include adding individual tracking for acknowledgments using an acked[] array and introducing a received[] buffer at the receiver side to handle out-of-order packets. Unlike GBN, which relies on cumulative ACKs, SR marks each packet’s ACK status individually and advances the sender window only when the base packet is acknowledged. The receiver buffers valid out-of-order packets and delivers them in order once all earlier packets have been received.
+    
+    Since only one timer is allowed, the sender uses it to track the base packet. On timeout, the sender selectively resends only the packets that haven’t been acknowledged yet. These updates preserve the original window size and system constraints while enabling more efficient, reliable communication in networks with potential packet loss or delay, demonstrating correct SR behavior under the limitations of a single-timer environment.(base) kushal@Kushals-MacBook-Pro CN-SelectiveRepeat % ./sr
+    -----  Stop and Wait Network Simulator Version 1.1 --------
+    
+    Enter the number of messages to simulate: 10
+    Enter  packet loss probability [enter 0.0 for no loss]:0.1
+    Enter packet corruption probability [0.0 for no corruption]:0.0
+    If you want loss or corruption to only occur in one direction, choose the direction: 0 A->B, 1 A<-B, 2 A<->B (both directions) :0
+    Enter average time between messages from sender's layer5 [ > 0.0]:16
+    Enter TRACE:2
+    A_init: SR sender initialized
+    
+    EVENT time: 11.145137,  type: 1, fromlayer5  entity: 0
+              START TIMER: starting timer at 11.145137
+    A_output: Sent packet 0
+    
+    EVENT time: 16.554033,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 0
+    
+    EVENT time: 21.312181,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 0
+              STOP TIMER: stopping timer at 21.312181
+    
+    EVENT time: 31.458979,  type: 1, fromlayer5  entity: 0
+              START TIMER: starting timer at 31.458979
+    A_output: Sent packet 1
+    
+    EVENT time: 40.987106,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 1
+    
+    EVENT time: 45.827854,  type: 1, fromlayer5  entity: 0
+              START TIMER: starting timer at 45.827854
+    Warning: attempt to start a timer that is already started
+    A_output: Sent packet 2
+    
+    EVENT time: 47.458977,  type: 0, timerinterrupt   entity: 0
+    A_timerinterrupt: Timeout. Resending unACKed packets
+              TOLAYER3: packet being lost
+    A_timerinterrupt: Resent packet 1
+    A_timerinterrupt: Resent packet 2
+              START TIMER: starting timer at 47.458977
+    
+    EVENT time: 50.690342,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 1
+              STOP TIMER: stopping timer at 50.690342
+              START TIMER: starting timer at 50.690342
+    
+    EVENT time: 55.616283,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 2
+    
+    EVENT time: 56.629990,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 2
+              STOP TIMER: stopping timer at 56.629990
+    
+    EVENT time: 62.569645,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 2
+    
+    EVENT time: 68.412598,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 2
+              STOP TIMER: stopping timer at 68.412598
+    Warning: unable to cancel your timer. It wasn't running.
+    
+    EVENT time: 76.238808,  type: 1, fromlayer5  entity: 0
+              START TIMER: starting timer at 76.238808
+    A_output: Sent packet 3
+    
+    EVENT time: 77.455635,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 3
+    
+    EVENT time: 80.276840,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 3
+              STOP TIMER: stopping timer at 80.276840
+    
+    EVENT time: 97.126854,  type: 1, fromlayer5  entity: 0
+              START TIMER: starting timer at 97.126854
+    A_output: Sent packet 4
+    
+    EVENT time: 97.211815,  type: 1, fromlayer5  entity: 0
+              START TIMER: starting timer at 97.211815
+    Warning: attempt to start a timer that is already started
+    A_output: Sent packet 5
+    
+    EVENT time: 103.807251,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 4
+    
+    EVENT time: 106.212517,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 4
+              STOP TIMER: stopping timer at 106.212517
+              START TIMER: starting timer at 106.212517
+    
+    EVENT time: 107.090256,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 5
+    
+    EVENT time: 108.252151,  type: 1, fromlayer5  entity: 0
+              START TIMER: starting timer at 108.252151
+    Warning: attempt to start a timer that is already started
+    A_output: Sent packet 6
+    
+    EVENT time: 114.104378,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 5
+              STOP TIMER: stopping timer at 114.104378
+              START TIMER: starting timer at 114.104378
+    
+    EVENT time: 115.559105,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 6
+    
+    EVENT time: 125.229713,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 6
+              STOP TIMER: stopping timer at 125.229713
+    
+    EVENT time: 132.220062,  type: 1, fromlayer5  entity: 0
+              TOLAYER3: packet being lost
+              START TIMER: starting timer at 132.220062
+    A_output: Sent packet 7
+    
+    EVENT time: 148.220062,  type: 0, timerinterrupt   entity: 0
+    A_timerinterrupt: Timeout. Resending unACKed packets
+    A_timerinterrupt: Resent packet 7
+              START TIMER: starting timer at 148.220062
+    
+    EVENT time: 151.040985,  type: 1, fromlayer5  entity: 0
+              TOLAYER3: packet being lost
+              START TIMER: starting timer at 151.040985
+    Warning: attempt to start a timer that is already started
+    A_output: Sent packet 8
+    
+    EVENT time: 156.393661,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 7
+    
+    EVENT time: 158.157288,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 7
+              STOP TIMER: stopping timer at 158.157288
+              START TIMER: starting timer at 158.157288
+    
+    EVENT time: 165.214188,  type: 1, fromlayer5  entity: 0
+              START TIMER: starting timer at 165.214188
+    Warning: attempt to start a timer that is already started
+    A_output: Sent packet 9
+    
+    EVENT time: 169.597198,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 9
+    
+    EVENT time: 174.157288,  type: 0, timerinterrupt   entity: 0
+    A_timerinterrupt: Timeout. Resending unACKed packets
+    A_timerinterrupt: Resent packet 8
+    A_timerinterrupt: Resent packet 9
+              START TIMER: starting timer at 174.157288
+    
+    EVENT time: 175.487915,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 9
+              STOP TIMER: stopping timer at 175.487915
+              START TIMER: starting timer at 175.487915
+    
+    EVENT time: 178.033051,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 8
+    
+    EVENT time: 183.702850,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 8
+              STOP TIMER: stopping timer at 183.702850
+    
+    EVENT time: 187.723053,  type: 2, fromlayer3  entity: 1
+    B_input: Received packet 9
+    
+    EVENT time: 192.554535,  type: 1, fromlayer5  entity: 0
+    
+    EVENT time: 195.964676,  type: 2, fromlayer3  entity: 0
+    A_input: Received valid ACK 9
+              STOP TIMER: stopping timer at 195.964676
+    Warning: unable to cancel your timer. It wasn't running.
+     Simulator terminated at time 195.964676
+     after attempting to send 10 msgs from layer5
+    number of messages dropped due to full window:  0
+    number of valid (not corrupt or duplicate) acknowledgements received at A:  12
+    (note: a single acknowledgement may have acknowledged more than one packet - if cumulative acknowledgements are used)
+    number of packet resends by A:  5
+    number of correct packets received at B:  12
+    number of messages delivered to application:  10
+
+commit 3ffa611bc12761491bfe6be823b21a03fc0f955d
+Author: KushalDudhia <98812374+KushalDudhia@users.noreply.github.com>
+Date:   Thu May 1 16:27:22 2025 +0930
+
+     Added full receiver buffering and ACK handling in B_input()
+    
+    - Implemented B_input() using a receiver-side buffer and selective ACK logic.
+    - Receiver now correctly accepts out-of-order packets and delivers them to layer 5 in order.
+    - Added received[] tracking and expected_seqnum_B logic.
+    
+    🧪 TEST CASE:
+    - Ran simulation with:
+        - 10 messages
+        - 10% packet loss
+        - 0% corruption
+        - TRACE level 2
+    
+    RESULTS:
+    - 7/10 packets delivered successfully to layer 5
+    - 3 packets dropped due to window being full
+    - 1 packet had to be resent (packet 4), and was later delivered
+    - ACKs were received for each individual packet
+    - Confirmed correct handling of timeouts, individual ACKs, and window sliding
+    
+    This test confirms proper Selective Repeat behavior with per-packet retransmission and buffering.
+
+commit 93f6160d502f9a912b9f2122f214aa3f025f6b78
+Author: KushalDudhia <98812374+KushalDudhia@users.noreply.github.com>
+Date:   Thu May 1 16:10:59 2025 +0930
+
+    I rewrote A_input() with Selective Repeat logic (acked[], window_base) and tested it as well. TEST RESULT:(base) kushal@Kushals-MacBook-Pro CN-SelectiveRepeat % gcc -Wall -std=c99 -o sr emulator.c sr.c
+    
+    (base) kushal@Kushals-MacBook-Pro CN-SelectiveRepeat % ./sr
+    -----  Stop and Wait Network Simulator Version 1.1 --------
+    
+    Enter the number of messages to simulate: 5
+    Enter  packet loss probability [enter 0.0 for no loss]:0.0
+    Enter packet corruption probability [0.0 for no corruption]:0.0
+    Enter average time between messages from sender's layer5 [ > 0.0]:10
+    Enter TRACE:1
+    A_init: SR sender initialized (window_base = 0, next_seqnum = 0)
+    A_output: Sent packet 0
+    ----B: packet 0 is correctly received, send ACK!
+    A_input: Received valid ACK 0
+    A_output: Sent packet 1
+    Warning: attempt to start a timer that is already started
+    A_output: Sent packet 2
+    ----B: packet 1 is correctly received, send ACK!
+    Warning: attempt to start a timer that is already started
+    A_output: Sent packet 3
+    Warning: attempt to start a timer that is already started
+    A_output: Sent packet 4
+    A_timerinterrupt: Timeout occurred. Resending unACKed packets.
+    A_timerinterrupt: Resent packet 1
+    A_timerinterrupt: Resent packet 2
+    A_timerinterrupt: Resent packet 3
+    A_timerinterrupt: Resent packet 4
+    ----B: packet 2 is correctly received, send ACK!
+    A_input: Received valid ACK 1
+    A_input: Received valid ACK 2
+    ----B: packet 3 is correctly received, send ACK!
+    A_input: Received valid ACK 3
+    ----B: packet 4 is correctly received, send ACK!
+    A_input: Received valid ACK 4
+    ----B: packet corrupted or not expected sequence number, resend ACK!
+    ----B: packet corrupted or not expected sequence number, resend ACK!
+    A_input: Received valid ACK 4
+    Warning: unable to cancel your timer. It wasn't running.
+    ----B: packet corrupted or not expected sequence number, resend ACK!
+    A_input: Received valid ACK 4
+    Warning: unable to cancel your timer. It wasn't running.
+    ----B: packet corrupted or not expected sequence number, resend ACK!
+    A_input: Received valid ACK 4
+    Warning: unable to cancel your timer. It wasn't running.
+    A_input: Received valid ACK 4
+    Warning: unable to cancel your timer. It wasn't running.
+     Simulator terminated at time 80.455986
+     after attempting to send 5 msgs from layer5
+    number of messages dropped due to full window:  0
+    number of valid (not corrupt or duplicate) acknowledgements received at A:  6
+    (note: a single acknowledgement may have acknowledged more than one packet - if cumulative acknowledgements are used)
+    number of packet resends by A:  4
+    number of correct packets received at B:  5
+    number of messages delivered to application:  5
+
+commit 419a172fe414c53c63b12dea2eaf851f5a58bd38
+Author: KushalDudhia <98812374+KushalDudhia@users.noreply.github.com>
+Date:   Thu May 1 15:03:39 2025 +0930
+
+    TEST: (base) kushal@Kushals-MacBook-Pro CN-SelectiveRepeat % ./sr
+    -----  Stop and Wait Network Simulator Version 1.1 --------
+    
+    Enter the number of messages to simulate: 5
+    Enter  packet loss probability [enter 0.0 for no loss]:0.0
+    Enter packet corruption probability [0.0 for no corruption]:0.0
+    Enter average time between messages from sender's layer5 [ > 0.0]:10
+    Enter TRACE:1
+    Sending packet 0 to layer 3
+    ----B: packet 0 is correctly received, send ACK!
+    ----A: uncorrupted ACK 0 is received
+    ----A: ACK 0 is not a duplicate
+    Sending packet 1 to layer 3
+    Sending packet 2 to layer 3
+    ----B: packet 1 is correctly received, send ACK!
+    Sending packet 3 to layer 3
+    Sending packet 4 to layer 3
+    ----A: time out,resend packets!
+    ---A: resending packet 1
+    ---A: resending packet 2
+    ---A: resending packet 3
+    ---A: resending packet 4
+    ----B: packet 2 is correctly received, send ACK!
+    ----A: uncorrupted ACK 1 is received
+    ----A: ACK 1 is not a duplicate
+    ----A: uncorrupted ACK 2 is received
+    ----A: ACK 2 is not a duplicate
+    ----B: packet 3 is correctly received, send ACK!
+    ----A: uncorrupted ACK 3 is received
+    ----A: ACK 3 is not a duplicate
+    ----B: packet 4 is correctly received, send ACK!
+    ----A: uncorrupted ACK 4 is received
+    ----A: ACK 4 is not a duplicate
+    ----B: packet corrupted or not expected sequence number, resend ACK!
+    ----B: packet corrupted or not expected sequence number, resend ACK!
+    ----A: uncorrupted ACK 4 is received
+    ----A: duplicate ACK received, do nothing!
+    ----B: packet corrupted or not expected sequence number, resend ACK!
+    ----A: uncorrupted ACK 4 is received
+    ----A: duplicate ACK received, do nothing!
+    ----B: packet corrupted or not expected sequence number, resend ACK!
+    ----A: uncorrupted ACK 4 is received
+    ----A: duplicate ACK received, do nothing!
+    ----A: uncorrupted ACK 4 is received
+    ----A: duplicate ACK received, do nothing!
+     Simulator terminated at time 80.455986
+     after attempting to send 5 msgs from layer5
+    number of messages dropped due to full window:  0
+    number of valid (not corrupt or duplicate) acknowledgements received at A:  5
+    (note: a single acknowledgement may have acknowledged more than one packet - if cumulative acknowledgements are used)
+    number of packet resends by A:  4
+    number of correct packets received at B:  5
+    number of messages delivered to application:  5
+
+commit 3c2f79b93523d9df483fb077e31971e0bc98ae74
+Author: KushalDudhia <98812374+KushalDudhia@users.noreply.github.com>
+Date:   Thu May 1 13:08:48 2025 +0930
+
+    I have created sr.c and sr.h by copying from Go-Back-N base
+
+commit 2000f2357f4556888aabb2ba0f17e301f2d39a62
+Author: KushalDudhia <98812374+KushalDudhia@users.noreply.github.com>
+Date:   Thu May 1 13:07:16 2025 +0930
+
+    I have added base GBN and emulator files
+
+commit 446db07fc8b2554359c150f07b2834d336d2f795
+Author: KUSHAL DUDHIA <98812374+KushalDudhia@users.noreply.github.com>
+Date:   Thu May 1 13:04:02 2025 +0930
+
+    Initial commit
+(END)
+    (note: a single acknowledgement may have acknowledged more than one packet - if cumulative acknowledgements are used)
+    number of packet resends by A:  4
+    number of correct packets received at B:  5
+    number of messages delivered to application:  5
+
+commit 3c2f79b93523d9df483fb077e31971e0bc98ae74
+Author: KushalDudhia <98812374+KushalDudhia@users.noreply.github.com>
+Date:   Thu May 1 13:08:48 2025 +0930
+
+    I have created sr.c and sr.h by copying from Go-Back-N base
+
+commit 2000f2357f4556888aabb2ba0f17e301f2d39a62
+Author: KushalDudhia <98812374+KushalDudhia@users.noreply.github.com>
+Date:   Thu May 1 13:07:16 2025 +0930
+
+    I have added base GBN and emulator files
+
+commit 446db07fc8b2554359c150f07b2834d336d2f795
+Author: KUSHAL DUDHIA <98812374+KushalDudhia@users.noreply.github.com>
+Date:   Thu May 1 13:04:02 2025 +0930
+
+    Initial commit
+~
+~
+(END)
