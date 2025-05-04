@@ -68,8 +68,8 @@ void A_output(struct msg message)
   int i;
 
   if ( windowcount < WINDOWSIZE) {
-    if (TRACE > 1)
-      printf("----A: New message arrives, send window is not full, send new messge to layer3!\n");
+    if (TRACE > 0)
+      printf("----A: New message arrives, send window is not full, send new message to layer3!\n");
 
     sendpkt.seqnum = A_nextseqnum;
     sendpkt.acknum = NOTINUSE;
@@ -91,7 +91,7 @@ void A_output(struct msg message)
     A_nextseqnum = (A_nextseqnum + 1) % SEQSPACE;
   }
   else {
-    if (TRACE > 1)
+    if (TRACE > 0)
       printf("----A: New message arrives, send window is full\n");
     window_full++;
   }
